@@ -6,8 +6,9 @@
 
 class SamsungIRSender{
     public:
-    SamsungIRSender();
+    void begin();
     void sendOn();
+    void sendOff();
     
 };
 

@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 #include <DNSServer.h>
@@ -7,6 +8,10 @@
 #include <ArduinoOTA.h>
 #include <math.h>
 #include <U8g2lib.h>
+#include <ui.h>
+// #include <IRsend.h>
+// #include <irCode.h>
+
 #include <SamsungIRSender.h>
 
 #ifdef U8X8_HAVE_HW_SPI
@@ -22,21 +27,20 @@ Topic : homebridge/from/set
 Payload: {"name" : "Blind 1" ,  "service_name" : "blind_1" , "characteristic" : "TargetPosition" , "value" : 50}
 */
 
-
 // Constants
 const char *autoconf_ssid = "ESP8266 Smart AC"; //AP name for WiFi setup AP which your ESP will open when not able to connect to other WiFi
-const char *autoconf_pwd = "12345678";        //AP password so noone else can connect to the ESP in case your router fails
-const char *mqtt_server = "192.168.1.15";     //MQTT Server IP, your home MQTT server eg Mosquitto on RPi, or some public MQTT
-const int mqtt_port = 1883;                   //MQTT Server PORT, default is 1883 but can be anything.
+const char *autoconf_pwd = "12345678";          //AP password so noone else can connect to the ESP in case your router fails
+const char *mqtt_server = "192.168.1.15";       //MQTT Server IP, your home MQTT server eg Mosquitto on RPi, or some public MQTT
+const int mqtt_port = 1883;                     //MQTT Server PORT, default is 1883 but can be anything.
 const int btnPower = D5;
 const int btnTempUp = D6;
 const int btnTempDown = D7;
 
-const int OLED_ckl = D1;
+const int OLED_ckl = D3;
 const int OLED_sdin = D2;
-const int OLED_rst = D3;
-const int OLED_cs = D4;
-
+const int OLED_rst = D1;
+const int OLED_cs = D0;
+const int IR_pin = D8;
 
 // MQTT Constants
 const char *mqtt_device_value_from_set_topic = "homebridge/from/set";
@@ -44,21 +48,59 @@ const char *mqtt_device_value_to_set_topic = "homebridge/to/set";
 String device_name = "Smart AC";
 String service_name = "smart_ac";
 
-
 // Global Variable
 WiFiClient espClient;
 PubSubClient client(espClient);
 SamsungIRSender irsender;
-U8G2_SSD1322_NHD_256X64_1_3W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 2, /* data=*/ 0, /* cs=*/ 5, /* reset=*/ 4);	// OLED Display
+U8G2_SSD1322_NHD_256X64_1_3W_SW_SPI u8g2(U8G2_R0, /* clock=*/OLED_ckl, /* data=*/OLED_sdin, /* cs=*/OLED_cs, /* reset=*/OLED_rst); // OLED Display
 unsigned int isOn = false;
 unsigned int setTemp = 25;
 unsigned int isSwing = true;
-unsigned int isCool = true;   //false = fan mode
-unsigned int speed = 0;       //0: Auto, 1:Min, 2:Medium, 3:High
-
+unsigned int isCool = true; //false = fan mode
+unsigned int speed = 0;     //0: Auto, 1:Min, 2:Medium, 3:High
+// IRsend irsend(IR_pin);
 
 //Declare prototype functions
 
+void updateDisplay()
+{
+u8g2.firstPage();
+  if (isOn){
+    char currentTemp[3];
+    String(setTemp).toCharArray(currentTemp,3);
+
+    do {
+    u8g2.setFont(u8g2_font_logisoso50_tn);
+    u8g2.drawStr(14, 57, currentTemp);
+    u8g2.setFont(u8g2_font_helvR24_tf);
+    u8g2.drawUTF8(89, 57,"°c");
+
+
+    u8g2.drawXBMP( 200, 37, 58, 27, test_page);
+        // u8g2.drawXBMP(0,0, u8g2_logo_97x51_width, u8g2_logo_97x51_height, u8g2_logo_97x51_bits);
+
+    // u8g2.setFont(u8g2_font_ncenB10_tr);
+    // u8g2.drawStr(0,12,"On");
+    } while ( u8g2.nextPage() );}
+  else
+  {
+    do
+    {
+      u8g2.setFont(u8g2_font_ncenB10_tr);
+      u8g2.drawStr(0, 12, "Off");
+    } while (u8g2.nextPage());
+
+  }
+}
+
+void blink()
+{
+
+  //Blink on received MQTT message
+  digitalWrite(2, LOW);
+  delay(20);
+  digitalWrite(2, HIGH);
+}
 
 void setup_ota()
 {
@@ -83,14 +125,20 @@ void setup_ota()
   ArduinoOTA.begin();
 }
 
-void ACOn(){
+void ACOnOff()
+{
+  if(!isOn){
   Serial.println("AC On");
-  irsender.sendOn();
-  u8g2.firstPage();
-  do {
-    u8g2.setFont(u8g2_font_ncenB10_tr);
-    u8g2.drawStr(0,64,"Hello World!");
-  } while ( u8g2.nextPage() );
+   irsender.sendOn();
+    isOn = true;
+  }
+  else{
+    Serial.println("AC Off");
+
+    irsender.sendOff();
+    isOn = false;
+  }
+  updateDisplay();
 }
 
 void reconnect()
@@ -119,32 +167,37 @@ void reconnect()
   }
 }
 
-void blink()
+void btnPowerPressed()
 {
-
-  //Blink on received MQTT message
-  digitalWrite(LED_BUILTIN, LOW);
-  delay(20);
-  digitalWrite(LED_BUILTIN, HIGH);
-} 
-
-
-void btnPowerPressed(){
-  if(!isOn){
-  }
+  while (digitalRead(btnTempUp) == LOW)
+  {
+    delay(0);
+  };
+  ACOnOff();
 
 }
 
 void btnUpPressed()
 {
-  while (digitalRead(btnTempUp) == LOW){delay(0);};
-  ACOn();
-  
+
+  while (digitalRead(btnTempUp) == LOW)
+  {
+    delay(0);
+  };
+  // ACOn();
+  setTemp++;
+  updateDisplay();
 }
 
 void btnDownPressed()
 {
-
+  while (digitalRead(btnTempUp) == LOW)
+  {
+    delay(0);
+  };
+  setTemp --;
+  updateDisplay();
+  // ACOn();
 }
 
 void callback(char *topic, byte *payload, unsigned int length)
@@ -182,15 +235,15 @@ void callback(char *topic, byte *payload, unsigned int length)
   }
 }
 
-
-
 void setup()
 {
   Serial.begin(9600);
 
   // Setup buttons
+  pinMode(btnPower, INPUT_PULLUP);
   pinMode(btnTempDown, INPUT_PULLUP);
   pinMode(btnTempUp, INPUT_PULLUP);
+  pinMode(2, OUTPUT);
 
   // Setup networking
   WiFiManager wifiManager;
@@ -200,15 +253,14 @@ void setup()
   client.setCallback(callback);
 
   //Attach interrupt for manual button controls
-  attachInterrupt(digitalPinToInterrupt(btnPower), btnUpPressed, FALLING);
+  attachInterrupt(digitalPinToInterrupt(btnPower), btnPowerPressed, FALLING);
   attachInterrupt(digitalPinToInterrupt(btnTempDown), btnUpPressed, FALLING);
   attachInterrupt(digitalPinToInterrupt(btnTempUp), btnDownPressed, FALLING);
 
-    u8g2.begin();  
-
-  
+  u8g2.begin();
+  // irsend.begin();
+  irsender.begin();
 }
-
 
 void loop()
 {
@@ -218,11 +270,7 @@ void loop()
   }
   client.loop();
   ArduinoOTA.handle();
-
-
-
 }
-
 
 /* IRremoteESP8266: IRsendDemo - demonstrates sending IR codes with IRsend.
  *
