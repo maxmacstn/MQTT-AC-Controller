@@ -9,6 +9,8 @@ class SamsungIRSender{
     void begin();
     void sendOn();
     void sendOff();
+    void setCoolMode(unsigned int temp,unsigned int fanSpeed , bool isSwing);
+    void setFanMode();
     
 };
 

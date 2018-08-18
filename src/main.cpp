@@ -7,12 +7,11 @@
 #include <ArduinoJson.h>
 #include <ArduinoOTA.h>
 #include <math.h>
-#include <U8g2lib.h>
-#include <ui.h>
+#include <SamsungIRSender.h>
+#include "main.h"
 // #include <IRsend.h>
 // #include <irCode.h>
 
-#include <SamsungIRSender.h>
 
 #ifdef U8X8_HAVE_HW_SPI
 #include <SPI.h>
@@ -26,76 +25,80 @@ Add to mqtt API
 Topic : homebridge/from/set
 Payload: {"name" : "Blind 1" ,  "service_name" : "blind_1" , "characteristic" : "TargetPosition" , "value" : 50}
 */
-
-// Constants
-const char *autoconf_ssid = "ESP8266 Smart AC"; //AP name for WiFi setup AP which your ESP will open when not able to connect to other WiFi
-const char *autoconf_pwd = "12345678";          //AP password so noone else can connect to the ESP in case your router fails
-const char *mqtt_server = "192.168.1.15";       //MQTT Server IP, your home MQTT server eg Mosquitto on RPi, or some public MQTT
-const int mqtt_port = 1883;                     //MQTT Server PORT, default is 1883 but can be anything.
-const int btnPower = D5;
-const int btnTempUp = D6;
-const int btnTempDown = D7;
-
-const int OLED_ckl = D3;
-const int OLED_sdin = D2;
-const int OLED_rst = D1;
-const int OLED_cs = D0;
-const int IR_pin = D8;
-
-// MQTT Constants
-const char *mqtt_device_value_from_set_topic = "homebridge/from/set";
-const char *mqtt_device_value_to_set_topic = "homebridge/to/set";
-String device_name = "Smart AC";
-String service_name = "smart_ac";
-
 // Global Variable
 WiFiClient espClient;
 PubSubClient client(espClient);
 SamsungIRSender irsender;
-U8G2_SSD1322_NHD_256X64_1_3W_SW_SPI u8g2(U8G2_R0, /* clock=*/OLED_ckl, /* data=*/OLED_sdin, /* cs=*/OLED_cs, /* reset=*/OLED_rst); // OLED Display
-unsigned int isOn = false;
-unsigned int setTemp = 25;
-unsigned int isSwing = true;
-unsigned int isCool = true; //false = fan mode
-unsigned int speed = 0;     //0: Auto, 1:Min, 2:Medium, 3:High
-// IRsend irsend(IR_pin);
 
 //Declare prototype functions
 
+// function for rotory encoder interrupt
+void rotary1Int()
+{
+
+  if (rotary_2)
+  {
+    //when rotary turns ccw
+    
+  }
+  rotary_1 = true;
+  rotary_2 = false;
+}
+
+void rotary2Int()
+{
+  if (rotary_1)
+  {
+    //when rotary turns cw
+  }
+  rotary_1 = false;
+  rotary_2 = true;
+}
+
 void updateDisplay()
 {
-u8g2.firstPage();
-  if (isOn){
-    char currentTemp[3];
-    String(setTemp).toCharArray(currentTemp,3);
+  // u8g2.firstPage();
+  // if (isOn){
+    
+    
+  //   char currentTemp[3];
+  //   String(setTemp).toCharArray(currentTemp, 3);
+  //   do
+  //   {
+  //     u8g2.setFont(u8g2_font_logisoso50_tn);
+  //     u8g2.drawStr(14, 57, currentTemp);
+  //     u8g2.setFont(u8g2_font_helvR24_tf);
+  //     u8g2.drawUTF8(89, 57, "°c");
 
-    do {
-    u8g2.setFont(u8g2_font_logisoso50_tn);
-    u8g2.drawStr(14, 57, currentTemp);
-    u8g2.setFont(u8g2_font_helvR24_tf);
-    u8g2.drawUTF8(89, 57,"°c");
+  //     u8g2.drawXBMP(200, 37, 58, 27, test_page);
+  //     // u8g2.drawXBMP(0,0, u8g2_logo_97x51_width, u8g2_logo_97x51_height, u8g2_logo_97x51_bits);
 
+  //     // u8g2.setFont(u8g2_font_ncenB10_tr);
+  //     // u8g2.drawStr(0,12,"On");
+  //   } while (u8g2.nextPage());
+  // }
+  // else
+  // {
+  //   do
+  //   {
+  //     u8g2.setFont(u8g2_font_ncenB10_tr);
+  //     u8g2.drawStr(0, 12, "Off");
+  //   } while (u8g2.nextPage());
+  // }
+}
 
-    u8g2.drawXBMP( 200, 37, 58, 27, test_page);
-        // u8g2.drawXBMP(0,0, u8g2_logo_97x51_width, u8g2_logo_97x51_height, u8g2_logo_97x51_bits);
-
-    // u8g2.setFont(u8g2_font_ncenB10_tr);
-    // u8g2.drawStr(0,12,"On");
-    } while ( u8g2.nextPage() );}
-  else
-  {
-    do
-    {
-      u8g2.setFont(u8g2_font_ncenB10_tr);
-      u8g2.drawStr(0, 12, "Off");
-    } while (u8g2.nextPage());
-
-  }
+void update(){
+  if(isOn){
+  if (isCool){
+    irsender.setCoolMode(setTemp,fanSpeed, isSwing);
+  }else{
+    irsender.setFanMode();
+  }}
+  updateDisplay();
 }
 
 void blink()
 {
-
   //Blink on received MQTT message
   digitalWrite(2, LOW);
   delay(20);
@@ -127,12 +130,14 @@ void setup_ota()
 
 void ACOnOff()
 {
-  if(!isOn){
-  Serial.println("AC On");
-   irsender.sendOn();
+  if (!isOn)
+  {
+    Serial.println("AC On");
+    irsender.sendOn();
     isOn = true;
   }
-  else{
+  else
+  {
     Serial.println("AC Off");
 
     irsender.sendOff();
@@ -167,6 +172,21 @@ void reconnect()
   }
 }
 
+void increment(){
+  if(!isCool)
+    return;
+  setTemp++;
+  update();
+  
+}
+
+void decrement(){
+  if(!isCool)
+    return;
+  setTemp--;
+  update();
+}
+
 void btnPowerPressed()
 {
   while (digitalRead(btnTempUp) == LOW)
@@ -174,7 +194,6 @@ void btnPowerPressed()
     delay(0);
   };
   ACOnOff();
-
 }
 
 void btnUpPressed()
@@ -195,7 +214,7 @@ void btnDownPressed()
   {
     delay(0);
   };
-  setTemp --;
+  setTemp--;
   updateDisplay();
   // ACOn();
 }
@@ -257,7 +276,7 @@ void setup()
   attachInterrupt(digitalPinToInterrupt(btnTempDown), btnUpPressed, FALLING);
   attachInterrupt(digitalPinToInterrupt(btnTempUp), btnDownPressed, FALLING);
 
-  u8g2.begin();
+  // u8g2.begin();
   // irsend.begin();
   irsender.begin();
 }
@@ -271,63 +290,3 @@ void loop()
   client.loop();
   ArduinoOTA.handle();
 }
-
-/* IRremoteESP8266: IRsendDemo - demonstrates sending IR codes with IRsend.
- *
- * Version 1.0 April, 2017
- * Based on Ken Shirriff's IrsendDemo Version 0.1 July, 2009,
- * Copyright 2009 Ken Shirriff, http://arcfn.com
- *
- * An IR LED circuit *MUST* be connected to the ESP8266 on a pin
- * as specified by IR_LED below.
- *
- * TL;DR: The IR LED needs to be driven by a transistor for a good result.
- *
- * Suggested circuit:
- *     https://github.com/markszabo/IRremoteESP8266/wiki#ir-sending
- *
- * Common mistakes & tips:
- *   * Don't just connect the IR LED directly to the pin, it won't
- *     have enough current to drive the IR LED effectively.
- *   * Make sure you have the IR LED polarity correct.
- *     See: https://learn.sparkfun.com/tutorials/polarity/diode-and-led-polarity
- *   * Typical digital camera/phones can be used to see if the IR LED is flashed.
- *     Replace the IR LED with a normal LED if you don't have a digital camera
- *     when debugging.
- *   * Avoid using the following pins unless you really know what you are doing:
- *     * Pin 0/D3: Can interfere with the boot/program mode & support circuits.
- *     * Pin 1/TX/TXD0: Any serial transmissions from the ESP8266 will interfere.
- *     * Pin 3/RX/RXD0: Any serial transmissions to the ESP8266 will interfere.
- *   * ESP-01 modules are tricky. We suggest you use a module with more GPIOs
- *     for your first time. e.g. ESP-12 etc.
- */
-
-// #ifndef UNIT_TEST
-// #include <Arduino.h>
-// #endif
-// #include <IRremoteESP8266.h>
-// #include <IRsend.h>
-
-// #define IR_LED 15  // ESP8266 GPIO pin to use. Recommended: 4 (D2).
-
-// IRsend irsend(IR_LED);  // Set the GPIO to be used to sending the message.
-
-// // Example of data captured by IRrecvDumpV2.ino
-// uint16_t rawData[67] = {9000, 4500, 650, 550, 650, 1650, 600, 550, 650, 550,
-//                         600, 1650, 650, 550, 600, 1650, 650, 1650, 650, 1650,
-//                         600, 550, 650, 1650, 650, 1650, 650, 550, 600, 1650,
-//                         650, 1650, 650, 550, 650, 550, 650, 1650, 650, 550,
-//                         650, 550, 650, 550, 600, 550, 650, 550, 650, 550,
-//                         650, 1650, 600, 550, 650, 1650, 650, 1650, 650, 1650,
-//                         650, 1650, 650, 1650, 650, 1650, 600};
-
-// void setup() {
-//   irsend.begin();
-//   Serial.begin(9600, SERIAL_8N1, SERIAL_TX_ONLY);
-// }
-
-// void loop() {
-//   Serial.println("a rawData capture from IRrecvDumpV2");
-//   irsend.sendRaw(rawData, 67, 36);  // Send a raw data capture at 38kHz.
-//   delay(2000);
-// }
