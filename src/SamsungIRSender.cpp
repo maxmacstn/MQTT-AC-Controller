@@ -1,10 +1,12 @@
 #include <SamsungIRSender.h>
 #include <irCode.h>
+#include <Arduino.h>
 
 
-IRsend irsend(15);
+IRsend irsend(D8);
 
 void SamsungIRSender::begin(){
+    pinMode(D8,OUTPUT);
     irsend.begin();
 }
 
@@ -24,4 +26,5 @@ void SamsungIRSender :: setCoolMode(unsigned int temp,unsigned int fanSpeed = 2,
 
 void setFanMode(){
     //Send fan mode
+    int three = 1+2;
 }

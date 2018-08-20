@@ -7,10 +7,11 @@
 #include <ArduinoJson.h>
 #include <ArduinoOTA.h>
 #include <math.h>
-#include <SamsungIRSender.h>
+#include <U8g2lib.h>
+#include "SamsungIRSender.h"
 #include "main.h"
 // #include <IRsend.h>
-// #include <irCode.h>
+#include "ui.h"
 
 
 #ifdef U8X8_HAVE_HW_SPI
@@ -20,80 +21,116 @@
 #include <Wire.h>
 #endif
 
-/*
-Add to mqtt API
-Topic : homebridge/from/set
-Payload: {"name" : "Blind 1" ,  "service_name" : "blind_1" , "characteristic" : "TargetPosition" , "value" : 50}
-*/
+
+
+
 // Global Variable
+    const int OLED_ckl = D3;
+    const int OLED_sdin = D2;
+    const int OLED_rst = D1;
+    const int OLED_cs = D0;
 WiFiClient espClient;
 PubSubClient client(espClient);
 SamsungIRSender irsender;
+U8G2_SSD1322_NHD_256X64_1_3W_SW_SPI u8g2(U8G2_R0, /* clock=*/OLED_ckl, /* data=*/OLED_sdin, /* cs=*/OLED_cs, /* reset=*/OLED_rst); // OLED Display
+
 
 //Declare prototype functions
+void increment();
+void decrement();
+void update();
+
 
 // function for rotory encoder interrupt
 void rotary1Int()
 {
 
-  if (rotary_2)
+  if (!digitalRead(rotary2))
   {
-    //when rotary turns ccw
-    
+    increment();
   }
-  rotary_1 = true;
-  rotary_2 = false;
+
 }
 
 void rotary2Int()
 {
-  if (rotary_1)
+    if (!digitalRead(rotary1))
   {
-    //when rotary turns cw
+    decrement();
   }
-  rotary_1 = false;
-  rotary_2 = true;
+}
+
+void changeACmode(){
+  isCool  = !isCool;
+  update();
 }
 
 void updateDisplay()
 {
-  // u8g2.firstPage();
-  // if (isOn){
+  u8g2.firstPage();
+
+  if (isOn){
     
     
-  //   char currentTemp[3];
-  //   String(setTemp).toCharArray(currentTemp, 3);
-  //   do
-  //   {
-  //     u8g2.setFont(u8g2_font_logisoso50_tn);
-  //     u8g2.drawStr(14, 57, currentTemp);
-  //     u8g2.setFont(u8g2_font_helvR24_tf);
-  //     u8g2.drawUTF8(89, 57, "°c");
+    char currentTemp[3];
+    String(setTemp).toCharArray(currentTemp, 3);
+    do
+    {
+      u8g2.drawBox(215,4,2,55);
+      
+      u8g2.drawXBMP(221, 4, 29, 13, wifi);
+      u8g2.drawXBMP(224, 21, 24, 5, mqtt);
+      u8g2.drawXBMP(227, 45, 19, 15, bulb);
 
-  //     u8g2.drawXBMP(200, 37, 58, 27, test_page);
-  //     // u8g2.drawXBMP(0,0, u8g2_logo_97x51_width, u8g2_logo_97x51_height, u8g2_logo_97x51_bits);
 
-  //     // u8g2.setFont(u8g2_font_ncenB10_tr);
-  //     // u8g2.drawStr(0,12,"On");
-  //   } while (u8g2.nextPage());
-  // }
-  // else
-  // {
-  //   do
-  //   {
-  //     u8g2.setFont(u8g2_font_ncenB10_tr);
-  //     u8g2.drawStr(0, 12, "Off");
-  //   } while (u8g2.nextPage());
-  // }
+
+      if(isCool){
+        u8g2.setFont(u8g2_font_glasstown_nbp_tf);
+        u8g2.drawStr(3, 17, "SET");
+        u8g2.setFont(u8g2_font_logisoso50_tn);
+        u8g2.drawStr(23, 57, currentTemp);
+        u8g2.setFont(u8g2_font_helvR24_tf);
+        u8g2.drawUTF8(90, 57, "°c");
+        u8g2.drawXBMP(199, 5, 13, 12, cool);
+      }else{
+          u8g2.drawStr(10, 30, "COOL OFF");
+      }
+
+      if(!isSwing)
+        1+1;
+      else
+        u8g2.drawXBMP(197, 24, 13, 13, swing_off);
+
+
+
+      u8g2.drawXBMP(171, 44, 39, 15, fan_max);
+      // u8g2.drawXBMP(0,0, u8g2_logo_97x51_width, u8g2_logo_97x51_height, u8g2_logo_97x51_bits);
+
+      // u8g2.setFont(u8g2_font_ncenB10_tr);
+      // u8g2.drawStr(0,12,"On");
+    } while (u8g2.nextPage());
+  }
+  else
+  {
+    do
+    {
+      u8g2.setFont(u8g2_font_ncenB10_tr);
+      u8g2.drawStr(0, 12, "Off");
+    } while (u8g2.nextPage());
+  }
 }
 
 void update(){
   if(isOn){
   if (isCool){
-    irsender.setCoolMode(setTemp,fanSpeed, isSwing);
+    // irsender.setCoolMode(setTemp,fanSpeed, isSwing);
+    irsender.sendOn();
   }else{
-    irsender.setFanMode();
-  }}
+    // irsender.setFanMode();
+  }
+  }else{
+    irsender.sendOff();
+  }
   updateDisplay();
 }
 
@@ -133,17 +170,14 @@ void ACOnOff()
   if (!isOn)
   {
     Serial.println("AC On");
-    irsender.sendOn();
     isOn = true;
   }
   else
   {
     Serial.println("AC Off");
-
-    irsender.sendOff();
     isOn = false;
   }
-  updateDisplay();
+  update();
 }
 
 void reconnect()
@@ -189,35 +223,35 @@ void decrement(){
 
 void btnPowerPressed()
 {
-  while (digitalRead(btnTempUp) == LOW)
+  while (digitalRead(btnPower) == LOW)
   {
     delay(0);
   };
   ACOnOff();
 }
 
-void btnUpPressed()
-{
+// void btnUpPressed()
+// {
 
-  while (digitalRead(btnTempUp) == LOW)
-  {
-    delay(0);
-  };
-  // ACOn();
-  setTemp++;
-  updateDisplay();
-}
+//   while (digitalRead(btnTempUp) == LOW)
+//   {
+//     delay(0);
+//   };
+//   // ACOn();
+//   setTemp++;
+//   updateDisplay();
+// }
 
-void btnDownPressed()
-{
-  while (digitalRead(btnTempUp) == LOW)
-  {
-    delay(0);
-  };
-  setTemp--;
-  updateDisplay();
-  // ACOn();
-}
+// void btnDownPressed()
+// {
+//   while (digitalRead(btnTempUp) == LOW)
+//   {
+//     delay(0);
+//   };
+//   setTemp--;
+//   updateDisplay();
+//   // ACOn();
+// }
 
 void callback(char *topic, byte *payload, unsigned int length)
 {
@@ -245,13 +279,60 @@ void callback(char *topic, byte *payload, unsigned int length)
   blink();
   const char *characteristic = root["characteristic"];
 
-  if (strcmp(characteristic, "TargetPosition") == 0)
+  if (strcmp(characteristic, "CoolingThresholdTemperature") == 0 )
   {
-    // int value = root["value"];
-    // Serial.print("Brightness = ");
-    // Serial.println(value, DEC);
-    // setPosition(value);
+      int value = root["value"];
+     if (value < minTemp || value > maxTemp){
+       return;
+     }
+     setTemp = value;
+     update();
   }
+  if (strcmp(characteristic, "Active") == 0 ){
+    int value = root["value"];
+    if (value != 1 && value != 0){
+       return;
+     }
+     isOn = value;
+     update();
+  }
+  if (strcmp(characteristic, "SwingMode") == 0 ){
+    int value = root["value"];
+    if (value != 1 && value != 0){
+       return;
+     }
+     isSwing = value;
+     update();
+  }
+  if (strcmp(characteristic, "RotationSpeed") == 0 )
+  {
+      int value = root["value"];
+     if (value < 0 || value > 3){
+       return;
+     }
+     fanSpeed = value;
+     update();
+  }
+    /*
+    // The value property of TargetHeaterCoolerState must be one of the following:
+  Characteristic.TargetHeaterCoolerState.AUTO = 0;
+  Characteristic.TargetHeaterCoolerState.HEAT = 1;
+  Characteristic.TargetHeaterCoolerState.COOL = 2;
+  */  if (strcmp(characteristic, "TargetHeaterCoolerState") == 0 )
+  {
+      int value = root["value"];
+     if (value < 0 || value > 3){
+       return;
+     }
+     if (value == 0 || value == 2){
+       isCool = true;
+     }else{
+       isCool = false;
+     }
+     update();
+  }
+
+
 }
 
 void setup()
@@ -260,8 +341,9 @@ void setup()
 
   // Setup buttons
   pinMode(btnPower, INPUT_PULLUP);
-  pinMode(btnTempDown, INPUT_PULLUP);
-  pinMode(btnTempUp, INPUT_PULLUP);
+  pinMode(rotary1, INPUT_PULLUP);
+  pinMode(rotary2, INPUT_PULLUP);
+  pinMode(rotary_btn, INPUT_PULLUP);
   pinMode(2, OUTPUT);
 
   // Setup networking
@@ -273,12 +355,15 @@ void setup()
 
   //Attach interrupt for manual button controls
   attachInterrupt(digitalPinToInterrupt(btnPower), btnPowerPressed, FALLING);
-  attachInterrupt(digitalPinToInterrupt(btnTempDown), btnUpPressed, FALLING);
-  attachInterrupt(digitalPinToInterrupt(btnTempUp), btnDownPressed, FALLING);
+  attachInterrupt(digitalPinToInterrupt(rotary1), rotary1Int, FALLING);
+  attachInterrupt(digitalPinToInterrupt(rotary2), rotary2Int, FALLING);
+    attachInterrupt(digitalPinToInterrupt(rotary_btn), changeACmode, FALLING);
 
-  // u8g2.begin();
-  // irsend.begin();
+
+  u8g2.begin();
   irsender.begin();
+    digitalWrite(2, HIGH);
+
 }
 
 void loop()
