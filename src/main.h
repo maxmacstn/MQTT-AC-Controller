@@ -29,6 +29,8 @@ const int btnPower = D5;
 const int rotary1 = D6;
 const int rotary2 = D7;
 const int rotary_btn = 3;
+const int btnSwing = D4;
+const int btnSpeed = 1;
 
 
 

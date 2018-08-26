@@ -13,7 +13,6 @@
 // #include <IRsend.h>
 #include "ui.h"
 
-
 #ifdef U8X8_HAVE_HW_SPI
 #include <SPI.h>
 #endif
@@ -21,25 +20,32 @@
 #include <Wire.h>
 #endif
 
-
-
-
 // Global Variable
-    const int OLED_ckl = D3;
-    const int OLED_sdin = D2;
-    const int OLED_rst = D1;
-    const int OLED_cs = D0;
+const int OLED_ckl = D3;
+const int OLED_sdin = D2;
+const int OLED_rst = D1;
+const int OLED_cs = D0;
 WiFiClient espClient;
 PubSubClient client(espClient);
 SamsungIRSender irsender;
 U8G2_SSD1322_NHD_256X64_1_3W_SW_SPI u8g2(U8G2_R0, /* clock=*/OLED_ckl, /* data=*/OLED_sdin, /* cs=*/OLED_cs, /* reset=*/OLED_rst); // OLED Display
-
 
 //Declare prototype functions
 void increment();
 void decrement();
 void update();
 
+void btnSwingInt()
+{
+  isSwing = !isSwing;
+  update();
+}
+
+void btnSpeedInt()
+{
+  fanSpeed = ++fanSpeed % 4;
+  update();
+}
 
 // function for rotory encoder interrupt
 void rotary1Int()
@@ -49,19 +55,19 @@ void rotary1Int()
   {
     increment();
   }
-
 }
 
 void rotary2Int()
 {
-    if (!digitalRead(rotary1))
+  if (!digitalRead(rotary1))
   {
     decrement();
   }
 }
 
-void changeACmode(){
-  isCool  = !isCool;
+void changeACmode()
+{
+  isCool = !isCool;
   update();
 }
 
@@ -69,22 +75,21 @@ void updateDisplay()
 {
   u8g2.firstPage();
 
-  if (isOn){
-    
-    
+  if (isOn)
+  {
+
     char currentTemp[3];
     String(setTemp).toCharArray(currentTemp, 3);
     do
     {
-      u8g2.drawBox(215,4,2,55);
-      
+      u8g2.drawBox(215, 4, 2, 55);
+
       u8g2.drawXBMP(221, 4, 29, 13, wifi);
       u8g2.drawXBMP(224, 21, 24, 5, mqtt);
       u8g2.drawXBMP(227, 45, 19, 15, bulb);
 
-
-
-      if(isCool){
+      if (isCool)
+      {
         u8g2.setFont(u8g2_font_glasstown_nbp_tf);
         u8g2.drawStr(3, 17, "SET");
         u8g2.setFont(u8g2_font_logisoso50_tn);
@@ -92,18 +97,33 @@ void updateDisplay()
         u8g2.setFont(u8g2_font_helvR24_tf);
         u8g2.drawUTF8(90, 57, "°c");
         u8g2.drawXBMP(199, 5, 13, 12, cool);
-      }else{
-          u8g2.drawStr(10, 30, "COOL OFF");
+      }
+      else
+      {
+        u8g2.drawStr(10, 30, "COOL OFF");
       }
 
-      if(!isSwing)
-        1+1;
+      if (isSwing)
+        u8g2.drawXBMP(197, 24, 13, 13, swing_on);
       else
         u8g2.drawXBMP(197, 24, 13, 13, swing_off);
 
+      switch (fanSpeed)
+      {
+      case 0:
+        u8g2.drawXBMP(171, 44, 39, 15, fan_auto);
+        break;
+      case 1:
+        u8g2.drawXBMP(171, 44, 39, 15, fan_min);
+        break;
+      case 2:
+        u8g2.drawXBMP(171, 44, 39, 15, fan_mid);
+        break;
+      case 3:
+        u8g2.drawXBMP(171, 44, 39, 15, fan_max);
+        break;
+      }
 
-
-      u8g2.drawXBMP(171, 44, 39, 15, fan_max);
       // u8g2.drawXBMP(0,0, u8g2_logo_97x51_width, u8g2_logo_97x51_height, u8g2_logo_97x51_bits);
 
       // u8g2.setFont(u8g2_font_ncenB10_tr);
@@ -120,16 +140,25 @@ void updateDisplay()
   }
 }
 
-void update(){
-  if(isOn){
-  if (isCool){
-    // irsender.setCoolMode(setTemp,fanSpeed, isSwing);
-    irsender.sendOn();
-  }else{
-    // irsender.setFanMode();
+void update()
+{
+  static bool isLastOn = false;
+  if (isOn)
+  {
+    if (isCool)
+    {
+      irsender.setCoolMode(setTemp, fanSpeed, isSwing, !isLastOn);
+      isLastOn = true;
+    }
+    else
+    {
+      // irsender.setFanMode();
+    }
   }
-  }else{
+  else
+  {
     irsender.sendOff();
+    isLastOn = false;
   }
   updateDisplay();
 }
@@ -206,16 +235,17 @@ void reconnect()
   }
 }
 
-void increment(){
-  if(!isCool)
+void increment()
+{
+  if (!isCool)
     return;
   setTemp++;
   update();
-  
 }
 
-void decrement(){
-  if(!isCool)
+void decrement()
+{
+  if (!isCool)
     return;
   setTemp--;
   update();
@@ -279,60 +309,69 @@ void callback(char *topic, byte *payload, unsigned int length)
   blink();
   const char *characteristic = root["characteristic"];
 
-  if (strcmp(characteristic, "CoolingThresholdTemperature") == 0 )
+  if (strcmp(characteristic, "CoolingThresholdTemperature") == 0)
   {
-      int value = root["value"];
-     if (value < minTemp || value > maxTemp){
-       return;
-     }
-     setTemp = value;
-     update();
-  }
-  if (strcmp(characteristic, "Active") == 0 ){
     int value = root["value"];
-    if (value != 1 && value != 0){
-       return;
-     }
-     isOn = value;
-     update();
+    if (value < minTemp || value > maxTemp)
+    {
+      return;
+    }
+    setTemp = value;
+    update();
   }
-  if (strcmp(characteristic, "SwingMode") == 0 ){
-    int value = root["value"];
-    if (value != 1 && value != 0){
-       return;
-     }
-     isSwing = value;
-     update();
-  }
-  if (strcmp(characteristic, "RotationSpeed") == 0 )
+  if (strcmp(characteristic, "Active") == 0)
   {
-      int value = root["value"];
-     if (value < 0 || value > 3){
-       return;
-     }
-     fanSpeed = value;
-     update();
+    int value = root["value"];
+    if (value != 1 && value != 0)
+    {
+      return;
+    }
+    isOn = value;
+    update();
   }
-    /*
+  if (strcmp(characteristic, "SwingMode") == 0)
+  {
+    int value = root["value"];
+    if (value != 1 && value != 0)
+    {
+      return;
+    }
+    isSwing = value;
+    update();
+  }
+  if (strcmp(characteristic, "RotationSpeed") == 0)
+  {
+    int value = root["value"];
+    if (value < 0 || value > 3)
+    {
+      return;
+    }
+    fanSpeed = value;
+    update();
+  }
+  /*
     // The value property of TargetHeaterCoolerState must be one of the following:
   Characteristic.TargetHeaterCoolerState.AUTO = 0;
   Characteristic.TargetHeaterCoolerState.HEAT = 1;
   Characteristic.TargetHeaterCoolerState.COOL = 2;
-  */  if (strcmp(characteristic, "TargetHeaterCoolerState") == 0 )
+  */
+  if (strcmp(characteristic, "TargetHeaterCoolerState") == 0)
   {
-      int value = root["value"];
-     if (value < 0 || value > 3){
-       return;
-     }
-     if (value == 0 || value == 2){
-       isCool = true;
-     }else{
-       isCool = false;
-     }
-     update();
+    int value = root["value"];
+    if (value < 0 || value > 3)
+    {
+      return;
+    }
+    if (value == 0 || value == 2)
+    {
+      isCool = true;
+    }
+    else
+    {
+      isCool = false;
+    }
+    update();
   }
-
-
 }
 
 void setup()
@@ -344,6 +383,9 @@ void setup()
   pinMode(rotary1, INPUT_PULLUP);
   pinMode(rotary2, INPUT_PULLUP);
   pinMode(rotary_btn, INPUT_PULLUP);
+  pinMode(btnSpeed, INPUT_PULLUP);
+  pinMode(btnSwing, INPUT_PULLUP);
+
   pinMode(2, OUTPUT);
 
   // Setup networking
@@ -357,13 +399,13 @@ void setup()
   attachInterrupt(digitalPinToInterrupt(btnPower), btnPowerPressed, FALLING);
   attachInterrupt(digitalPinToInterrupt(rotary1), rotary1Int, FALLING);
   attachInterrupt(digitalPinToInterrupt(rotary2), rotary2Int, FALLING);
-    attachInterrupt(digitalPinToInterrupt(rotary_btn), changeACmode, FALLING);
-
+  attachInterrupt(digitalPinToInterrupt(rotary_btn), changeACmode, FALLING);
+    attachInterrupt(digitalPinToInterrupt(btnSpeed), btnSpeedInt, FALLING);
+      attachInterrupt(digitalPinToInterrupt(btnSwing), btnSwingInt, FALLING);
 
   u8g2.begin();
   irsender.begin();
-    digitalWrite(2, HIGH);
-
+  digitalWrite(2, HIGH);
 }
 
 void loop()

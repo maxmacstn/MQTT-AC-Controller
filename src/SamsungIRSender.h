@@ -7,10 +7,11 @@
 class SamsungIRSender{
     public:
     void begin();
-    void sendOn();
+    // void sendOn();
     void sendOff();
-    void setCoolMode(unsigned int temp,unsigned int fanSpeed , bool isSwing);
+    void setCoolMode(unsigned int temp,unsigned int fanSpeed , bool isSwing, bool isFirstOn);
     void setFanMode();
+    // void sendHeaderCode(bool isFirstOn);
     
 };
 
