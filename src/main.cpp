@@ -148,6 +148,7 @@ void update()
     if (isCool)
     {
       irsender.setCoolMode(setTemp, fanSpeed, isSwing, !isLastOn);
+      Serial.println("Send IR : temp = "+ String(setTemp) + " swing = "+ String(isSwing) + " Fan Speed : " +String(fanSpeed));
       isLastOn = true;
     }
     else
@@ -157,6 +158,7 @@ void update()
   }
   else
   {
+    Serial.println("Send off");
     irsender.sendOff();
     isLastOn = false;
   }
@@ -300,13 +302,13 @@ void callback(char *topic, byte *payload, unsigned int length)
 
   const char *name = root["name"];
 
-  Serial.println(name);
+  // Serial.println(name);
   if (strcmp(name, device_name.c_str()) != 0)
   {
     return;
   }
 
-  blink();
+  // blink();
   const char *characteristic = root["characteristic"];
 
   if (strcmp(characteristic, "CoolingThresholdTemperature") == 0)
@@ -327,6 +329,7 @@ void callback(char *topic, byte *payload, unsigned int length)
       return;
     }
     isOn = value;
+    Serial.println(isOn);
     update();
   }
   if (strcmp(characteristic, "SwingMode") == 0)
@@ -383,8 +386,8 @@ void setup()
   pinMode(rotary1, INPUT_PULLUP);
   pinMode(rotary2, INPUT_PULLUP);
   pinMode(rotary_btn, INPUT_PULLUP);
-  pinMode(btnSpeed, INPUT_PULLUP);
-  pinMode(btnSwing, INPUT_PULLUP);
+  // pinMode(btnSpeed, INPUT_PULLUP);
+  // pinMode(btnSwing, INPUT_PULLUP);
 
   pinMode(2, OUTPUT);
 
@@ -400,12 +403,13 @@ void setup()
   attachInterrupt(digitalPinToInterrupt(rotary1), rotary1Int, FALLING);
   attachInterrupt(digitalPinToInterrupt(rotary2), rotary2Int, FALLING);
   attachInterrupt(digitalPinToInterrupt(rotary_btn), changeACmode, FALLING);
-    attachInterrupt(digitalPinToInterrupt(btnSpeed), btnSpeedInt, FALLING);
-      attachInterrupt(digitalPinToInterrupt(btnSwing), btnSwingInt, FALLING);
+    // attachInterrupt(digitalPinToInterrupt(btnSpeed), btnSpeedInt, FALLING);
+      // attachInterrupt(digitalPinToInterrupt(btnSwing), btnSwingInt, FALLING);
 
   u8g2.begin();
   irsender.begin();
   digitalWrite(2, HIGH);
+  u8g2.setContrast(10);
 }
 
 void loop()

@@ -28,8 +28,8 @@ const int mqtt_port = 1883;                     //MQTT Server PORT, default is 1
 const int btnPower = D5;
 const int rotary1 = D6;
 const int rotary2 = D7;
-const int rotary_btn = 3;
-const int btnSwing = D4;
+const int rotary_btn = D4;
+const int btnSwing = 3;
 const int btnSpeed = 1;
 
 
