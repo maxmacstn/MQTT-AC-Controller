@@ -31,10 +31,10 @@ const int rotary2 = D7;
 const int rotary_btn = D4;
 const int btnSwing = 3;
 const int btnSpeed = 1;
-
-
-
+const int ldrPin = A0;
 const int IR_pin = D8;
+
+const int screenBrightnessUpdateInt = 1000;     //Interval time for adjusting screen's brightness according to environment light.
 
 // MQTT Constants
 const char *mqtt_device_value_from_set_topic = "homebridge/from/set";
@@ -45,13 +45,15 @@ String service_name = "smart_ac";
 // Global variables
 unsigned int isOn = false;
 unsigned int setTemp = 25;
-unsigned int isSwing = true;
+unsigned int isSwing = false;
 unsigned int isCool = true; //false = fan mode
 unsigned int fanSpeed = 0;     //0: Auto, 1:Min, 2:Medium, 3:High
 unsigned int maxTemp = 28;
 unsigned int minTemp = 23;
 bool rotary_1 = false;
 bool rotary_2 = false;
+unsigned long previousMillis = 0;               //For auto screen brightness
+
 
 
 #endif

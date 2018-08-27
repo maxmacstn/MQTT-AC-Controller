@@ -27,11 +27,19 @@ void SamsungIRSender ::setCoolMode(unsigned int temp, unsigned int fanSpeed = 2,
         return;
     // sendHeaderCode(isFirstOn);
 
-    irsend.sendRaw(header, sizeof(header) / sizeof(uint16_t), 36);
     if (isFirstOn)
     {
+        // sendOff();     
+        // delay(1000);
+        irsend.sendRaw(header, sizeof(header) / sizeof(uint16_t), 36);
         irsend.sendRaw(on, sizeof(on) / sizeof(uint16_t), 36);
+
+    }else{
+        irsend.sendRaw(header, sizeof(header) / sizeof(uint16_t), 36);
+
     }
+
+
 
     switch (temp)
     {

@@ -34,17 +34,21 @@ U8G2_SSD1322_NHD_256X64_1_3W_SW_SPI u8g2(U8G2_R0, /* clock=*/OLED_ckl, /* data=*
 void increment();
 void decrement();
 void update();
+void updateServerValue();
 
 void btnSwingInt()
 {
   isSwing = !isSwing;
   update();
+  updateServerValue();
 }
 
 void btnSpeedInt()
 {
   fanSpeed = ++fanSpeed % 4;
   update();
+  updateServerValue();
+
 }
 
 // function for rotory encoder interrupt
@@ -69,6 +73,8 @@ void changeACmode()
 {
   isCool = !isCool;
   update();
+  updateServerValue();
+
 }
 
 void updateDisplay()
@@ -134,8 +140,8 @@ void updateDisplay()
   {
     do
     {
-      u8g2.setFont(u8g2_font_ncenB10_tr);
-      u8g2.drawStr(0, 12, "Off");
+      u8g2.setFont(u8g2_font_helvR14_tr);
+      u8g2.drawStr(0, 14, "Standby..");
     } while (u8g2.nextPage());
   }
 }
@@ -143,26 +149,73 @@ void updateDisplay()
 void update()
 {
   static bool isLastOn = false;
+  static int lastTemp = 0;
+  static bool lastIsSwing = isSwing;
+  static int lastFanSpeed = fanSpeed;
+  static int lastIsCool = isCool;
+
+  if(setTemp == lastTemp && isSwing == lastIsSwing && lastFanSpeed == fanSpeed && lastIsCool == isCool && isLastOn == isOn)
+    return;
+
   if (isOn)
   {
     if (isCool)
     {
       irsender.setCoolMode(setTemp, fanSpeed, isSwing, !isLastOn);
-      Serial.println("Send IR : temp = "+ String(setTemp) + " swing = "+ String(isSwing) + " Fan Speed : " +String(fanSpeed));
+      Serial.println("Send IR : temp = " + String(setTemp) + " swing = " + String(isSwing) + " Fan Speed : " + String(fanSpeed) + " IsLastOn : " + isLastOn);
       isLastOn = true;
+      lastTemp = setTemp;
+      lastIsSwing = isSwing;
+      lastFanSpeed = fanSpeed;
+      lastIsCool = true;
     }
     else
     {
       // irsender.setFanMode();
+      lastIsCool = false;
     }
   }
-  else
+  else if (isLastOn)
   {
     Serial.println("Send off");
     irsender.sendOff();
     isLastOn = false;
   }
   updateDisplay();
+}
+
+void updateServerValue(){
+
+  String value;
+  String message;
+  char data[120];
+
+  
+
+  message = "{\"name\" : \"" +device_name+ "\", \"service_name\" : \""+service_name+"\", \"characteristic\" : \"CurrentTemperature\", \"value\" : " + String(setTemp) + "}";
+  message.toCharArray(data, (message.length() + 1));
+  client.publish(mqtt_device_value_to_set_topic, data);
+
+
+  message = "{\"name\" : \"" +device_name+ "\", \"service_name\" : \""+service_name+"\", \"characteristic\" : \"Active\", \"value\" : " + String(isOn) + "}";
+  message.toCharArray(data, (message.length() + 1));
+  client.publish(mqtt_device_value_to_set_topic, data);
+
+
+  message = "{\"name\" : \"" +device_name+ "\", \"service_name\" : \""+service_name+"\", \"characteristic\" : \"SwingMode\", \"value\" : " + String(isSwing) + "}";
+  message.toCharArray(data, (message.length() + 1));
+  client.publish(mqtt_device_value_to_set_topic, data);
+
+
+  message = "{\"name\" : \"" +device_name+ "\", \"service_name\" : \""+service_name+"\", \"characteristic\" : \"CoolingThresholdTemperature\", \"value\" : " + String(setTemp) + "}";
+  message.toCharArray(data, (message.length() + 1));
+  client.publish(mqtt_device_value_to_set_topic, data);
+
+
+  message = "{\"name\" : \"" +device_name+ "\", \"service_name\" : \""+service_name+"\", \"characteristic\" : \"RotationSpeed\", \"value\" : " + String(fanSpeed) + "}";
+  message.toCharArray(data, (message.length() + 1));
+  client.publish(mqtt_device_value_to_set_topic, data);
+
 }
 
 void blink()
@@ -175,7 +228,6 @@ void blink()
 
 void setup_ota()
 {
-
   // Set OTA Password, and change it in platformio.ini
   ArduinoOTA.setPassword("ESP8266_PASSWORD");
   ArduinoOTA.onStart([]() {});
@@ -243,6 +295,8 @@ void increment()
     return;
   setTemp++;
   update();
+    updateServerValue();
+
 }
 
 void decrement()
@@ -251,6 +305,8 @@ void decrement()
     return;
   setTemp--;
   update();
+    updateServerValue();
+
 }
 
 void btnPowerPressed()
@@ -260,6 +316,8 @@ void btnPowerPressed()
     delay(0);
   };
   ACOnOff();
+  updateServerValue();
+
 }
 
 // void btnUpPressed()
@@ -329,7 +387,6 @@ void callback(char *topic, byte *payload, unsigned int length)
       return;
     }
     isOn = value;
-    Serial.println(isOn);
     update();
   }
   if (strcmp(characteristic, "SwingMode") == 0)
@@ -377,6 +434,27 @@ void callback(char *topic, byte *payload, unsigned int length)
   }
 }
 
+void autoAdjustScreenBrightness()
+{
+  unsigned long currentMillis = millis();
+
+  if (currentMillis - previousMillis >= screenBrightnessUpdateInt)
+  {
+
+    // Serial.println(analogRead(ldrPin));
+    // save the last time you blinked the LED
+    previousMillis = currentMillis;
+    if (analogRead(ldrPin) < 300)
+    {
+      u8g2.setContrast(5);
+    }
+    else
+    {
+      u8g2.setContrast(255);
+    }
+  }
+}
+
 void setup()
 {
   Serial.begin(9600);
@@ -403,13 +481,15 @@ void setup()
   attachInterrupt(digitalPinToInterrupt(rotary1), rotary1Int, FALLING);
   attachInterrupt(digitalPinToInterrupt(rotary2), rotary2Int, FALLING);
   attachInterrupt(digitalPinToInterrupt(rotary_btn), changeACmode, FALLING);
-    // attachInterrupt(digitalPinToInterrupt(btnSpeed), btnSpeedInt, FALLING);
-      // attachInterrupt(digitalPinToInterrupt(btnSwing), btnSwingInt, FALLING);
+  // attachInterrupt(digitalPinToInterrupt(btnSpeed), btnSpeedInt, FALLING);
+  // attachInterrupt(digitalPinToInterrupt(btnSwing), btnSwingInt, FALLING);
 
   u8g2.begin();
   irsender.begin();
   digitalWrite(2, HIGH);
-  u8g2.setContrast(10);
+  updateDisplay();
+    updateServerValue();
+
 }
 
 void loop()
@@ -420,4 +500,5 @@ void loop()
   }
   client.loop();
   ArduinoOTA.handle();
+  autoAdjustScreenBrightness();
 }
