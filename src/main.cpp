@@ -48,7 +48,6 @@ void btnSpeedInt()
   fanSpeed = ++fanSpeed % 4;
   update();
   updateServerValue();
-
 }
 
 // function for rotory encoder interrupt
@@ -74,7 +73,6 @@ void changeACmode()
   isCool = !isCool;
   update();
   updateServerValue();
-
 }
 
 void updateDisplay()
@@ -154,7 +152,7 @@ void update()
   static int lastFanSpeed = fanSpeed;
   static int lastIsCool = isCool;
 
-  if(setTemp == lastTemp && isSwing == lastIsSwing && lastFanSpeed == fanSpeed && lastIsCool == isCool && isLastOn == isOn)
+  if (setTemp == lastTemp && isSwing == lastIsSwing && lastFanSpeed == fanSpeed && lastIsCool == isCool && isLastOn == isOn)
     return;
 
   if (isOn)
@@ -184,38 +182,38 @@ void update()
   updateDisplay();
 }
 
-void updateServerValue(){
+void updateServerValue()
+{
 
   String value;
   String message;
   char data[120];
 
-  
-
-  message = "{\"name\" : \"" +device_name+ "\", \"service_name\" : \""+service_name+"\", \"characteristic\" : \"CurrentTemperature\", \"value\" : " + String(setTemp) + "}";
+  //Primary
+  message = "{\"name\" : \"" + device_name + "\", \"service_name\" : \"" + service_name + "\", \"characteristic\" : \"CurrentTemperature\", \"value\" : " + String(setTemp) + "}";
   message.toCharArray(data, (message.length() + 1));
   client.publish(mqtt_device_value_to_set_topic, data);
 
-
-  message = "{\"name\" : \"" +device_name+ "\", \"service_name\" : \""+service_name+"\", \"characteristic\" : \"Active\", \"value\" : " + String(isOn) + "}";
+  message = "{\"name\" : \"" + device_name + "\", \"service_name\" : \"" + service_name + "\", \"characteristic\" : \"Active\", \"value\" : " + String(isOn) + "}";
   message.toCharArray(data, (message.length() + 1));
   client.publish(mqtt_device_value_to_set_topic, data);
 
-
-  message = "{\"name\" : \"" +device_name+ "\", \"service_name\" : \""+service_name+"\", \"characteristic\" : \"SwingMode\", \"value\" : " + String(isSwing) + "}";
+  message = "{\"name\" : \"" + device_name + "\", \"service_name\" : \"" + service_name + "\", \"characteristic\" : \"SwingMode\", \"value\" : " + String(isSwing) + "}";
   message.toCharArray(data, (message.length() + 1));
   client.publish(mqtt_device_value_to_set_topic, data);
 
-
-  message = "{\"name\" : \"" +device_name+ "\", \"service_name\" : \""+service_name+"\", \"characteristic\" : \"CoolingThresholdTemperature\", \"value\" : " + String(setTemp) + "}";
+  message = "{\"name\" : \"" + device_name + "\", \"service_name\" : \"" + service_name + "\", \"characteristic\" : \"CoolingThresholdTemperature\", \"value\" : " + String(setTemp) + "}";
   message.toCharArray(data, (message.length() + 1));
   client.publish(mqtt_device_value_to_set_topic, data);
 
-
-  message = "{\"name\" : \"" +device_name+ "\", \"service_name\" : \""+service_name+"\", \"characteristic\" : \"RotationSpeed\", \"value\" : " + String(fanSpeed) + "}";
+  message = "{\"name\" : \"" + device_name + "\", \"service_name\" : \"" + service_name + "\", \"characteristic\" : \"RotationSpeed\", \"value\" : " + String(fanSpeed) + "}";
   message.toCharArray(data, (message.length() + 1));
   client.publish(mqtt_device_value_to_set_topic, data);
 
+  //Secondary
+  message = "{\"name\" : \"" + device_name_secondary + "\", \"service_name\" : \"" + service_name_secondary + "\", \"characteristic\" : \"On\", \"value\" : " + String(isOn) + "}";
+  message.toCharArray(data, (message.length() + 1));
+  client.publish(mqtt_device_value_to_set_topic, data);
 }
 
 void blink()
@@ -295,8 +293,7 @@ void increment()
     return;
   setTemp++;
   update();
-    updateServerValue();
-
+  updateServerValue();
 }
 
 void decrement()
@@ -305,8 +302,7 @@ void decrement()
     return;
   setTemp--;
   update();
-    updateServerValue();
-
+  updateServerValue();
 }
 
 void btnPowerPressed()
@@ -317,7 +313,6 @@ void btnPowerPressed()
   };
   ACOnOff();
   updateServerValue();
-
 }
 
 // void btnUpPressed()
@@ -361,7 +356,7 @@ void callback(char *topic, byte *payload, unsigned int length)
   const char *name = root["name"];
 
   // Serial.println(name);
-  if (strcmp(name, device_name.c_str()) != 0)
+  if (strcmp(name, device_name.c_str()) != 0 && strcmp(name, device_name_secondary.c_str()) != 0)
   {
     return;
   }
@@ -388,7 +383,31 @@ void callback(char *topic, byte *payload, unsigned int length)
     }
     isOn = value;
     update();
+    
+     //set secondary device status
+     char data[150];
+   String message = "{\"name\" : \"" + device_name_secondary + "\", \"service_name\" : \"" + service_name_secondary + "\", \"characteristic\" : \"On\", \"value\" : " + String(isOn) + "}";
+  message.toCharArray(data, (message.length() + 1));
+  client.publish(mqtt_device_value_to_set_topic, data);
   }
+    if ( strcmp(characteristic, "On") == 0)
+  {
+    int value = root["value"];
+    if (value != 1 && value != 0)
+    {
+      return;
+    }
+    isOn = value;
+    update();
+    
+     //set primary device status
+     char data[150];
+   String message = "{\"name\" : \"" + device_name + "\", \"service_name\" : \"" + service_name + "\", \"characteristic\" : \"Active\", \"value\" : " + String(isOn) + "}";
+  message.toCharArray(data, (message.length() + 1));
+  client.publish(mqtt_device_value_to_set_topic, data);
+  }
+
+
   if (strcmp(characteristic, "SwingMode") == 0)
   {
     int value = root["value"];
@@ -437,6 +456,7 @@ void callback(char *topic, byte *payload, unsigned int length)
 void autoAdjustScreenBrightness()
 {
   unsigned long currentMillis = millis();
+  static int currentContrast = 0;
 
   if (currentMillis - previousMillis >= screenBrightnessUpdateInt)
   {
@@ -444,13 +464,15 @@ void autoAdjustScreenBrightness()
     // Serial.println(analogRead(ldrPin));
     // save the last time you blinked the LED
     previousMillis = currentMillis;
-    if (analogRead(ldrPin) < 300)
+    if (analogRead(ldrPin) < 300 && currentContrast != 1)
     {
-      u8g2.setContrast(5);
+      u8g2.setContrast(1);
+      currentContrast = 1;
     }
     else
     {
       u8g2.setContrast(255);
+      currentContrast = 255;
     }
   }
 }
@@ -488,8 +510,7 @@ void setup()
   irsender.begin();
   digitalWrite(2, HIGH);
   updateDisplay();
-    updateServerValue();
-
+  updateServerValue();
 }
 
 void loop()

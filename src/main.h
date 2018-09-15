@@ -41,6 +41,8 @@ const char *mqtt_device_value_from_set_topic = "homebridge/from/set";
 const char *mqtt_device_value_to_set_topic = "homebridge/to/set";
 String device_name = "Smart AC";
 String service_name = "smart_ac";
+String device_name_secondary = "Smart AC Basic";
+String service_name_secondary = "smart_ac_basic";
 
 // Global variables
 unsigned int isOn = false;
