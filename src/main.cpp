@@ -469,9 +469,11 @@ void autoAdjustScreenBrightness()
       u8g2.setContrast(1);
       currentContrast = 1;
     }
-    else
+    else if(analogRead(ldrPin) >= 300)
     {
-      u8g2.setContrast(255);
+      // u8g2.setContrast(255);
+            u8g2.setContrast(1);
+
       currentContrast = 255;
     }
   }
