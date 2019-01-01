@@ -26,15 +26,15 @@ const char *autoconf_pwd = "12345678";          //AP password so noone else can 
 const char *mqtt_server = "192.168.1.15";       //MQTT Server IP, your home MQTT server eg Mosquitto on RPi, or some public MQTT
 const int mqtt_port = 1883;                     //MQTT Server PORT, default is 1883 but can be anything.
 const int btnPower = D5;
-const int rotary1 = D6;
-const int rotary2 = D7;
+const int btnUp = D6;
+const int btnDn = D7;
 const int rotary_btn = D4;
 const int btnSwing = 3;
 const int btnSpeed = 1;
 const int ldrPin = A0;
 const int IR_pin = D8;
 
-const int screenBrightnessUpdateInt = 1000;     //Interval time for adjusting screen's brightness according to environment light.
+const int screenBrightnessUpdateInt = 5000;     //Interval time for adjusting screen's brightness according to environment light.
 
 // MQTT Constants
 const char *mqtt_device_value_from_set_topic = "homebridge/from/set";
@@ -55,6 +55,8 @@ unsigned int minTemp = 23;
 bool rotary_1 = false;
 bool rotary_2 = false;
 unsigned long previousMillis = 0;               //For auto screen brightness
+int currentContrast = 255;
+
 
 
 

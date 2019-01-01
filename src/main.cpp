@@ -28,7 +28,7 @@ const int OLED_cs = D0;
 WiFiClient espClient;
 PubSubClient client(espClient);
 SamsungIRSender irsender;
-U8G2_SSD1322_NHD_256X64_1_3W_SW_SPI u8g2(U8G2_R0, /* clock=*/OLED_ckl, /* data=*/OLED_sdin, /* cs=*/OLED_cs, /* reset=*/OLED_rst); // OLED Display
+U8G2_SSD1322_NHD_256X64_1_3W_SW_SPI u8g2(U8G2_R2, /* clock=*/OLED_ckl, /* data=*/OLED_sdin, /* cs=*/OLED_cs, /* reset=*/OLED_rst); // OLED Display
 
 //Declare prototype functions
 void increment();
@@ -50,22 +50,16 @@ void btnSpeedInt()
   updateServerValue();
 }
 
-// function for rotory encoder interrupt
-void rotary1Int()
+// function for up-down interrupt
+void btnUpInt()
 {
 
-  if (!digitalRead(rotary2))
-  {
-    increment();
-  }
+  increment();
 }
 
-void rotary2Int()
+void btnDnInt()
 {
-  if (!digitalRead(rotary1))
-  {
-    decrement();
-  }
+  decrement();
 }
 
 void changeACmode()
@@ -76,7 +70,11 @@ void changeACmode()
 }
 
 void updateDisplay()
+
 {
+
+
+
   u8g2.firstPage();
 
   if (isOn)
@@ -86,45 +84,45 @@ void updateDisplay()
     String(setTemp).toCharArray(currentTemp, 3);
     do
     {
-      u8g2.drawBox(215, 4, 2, 55);
+      u8g2.drawBox(205, 4, 2, 55);
 
-      u8g2.drawXBMP(221, 4, 29, 13, wifi);
-      u8g2.drawXBMP(224, 21, 24, 5, mqtt);
-      u8g2.drawXBMP(227, 45, 19, 15, bulb);
+      u8g2.drawXBMP(211, 4, 29, 13, wifi);
+      u8g2.drawXBMP(214, 21, 24, 5, mqtt);
+      u8g2.drawXBMP(217, 45, 19, 15, bulb);
 
       if (isCool)
       {
         u8g2.setFont(u8g2_font_glasstown_nbp_tf);
-        u8g2.drawStr(3, 17, "SET");
+        u8g2.drawStr(0, 17, "SET");
         u8g2.setFont(u8g2_font_logisoso50_tn);
-        u8g2.drawStr(23, 57, currentTemp);
+        u8g2.drawStr(13, 57, currentTemp);
         u8g2.setFont(u8g2_font_helvR24_tf);
-        u8g2.drawUTF8(90, 57, "°c");
-        u8g2.drawXBMP(199, 5, 13, 12, cool);
+        u8g2.drawUTF8(80, 57, "°c");
+        u8g2.drawXBMP(189, 5, 13, 12, cool);
       }
       else
       {
-        u8g2.drawStr(10, 30, "COOL OFF");
+        u8g2.drawStr(0, 30, "COOL OFF");
       }
 
       if (isSwing)
-        u8g2.drawXBMP(197, 24, 13, 13, swing_on);
+        u8g2.drawXBMP(187, 24, 13, 13, swing_on);
       else
-        u8g2.drawXBMP(197, 24, 13, 13, swing_off);
+        u8g2.drawXBMP(187, 24, 13, 13, swing_off);
 
       switch (fanSpeed)
       {
       case 0:
-        u8g2.drawXBMP(171, 44, 39, 15, fan_auto);
+        u8g2.drawXBMP(161, 44, 39, 15, fan_auto);
         break;
       case 1:
-        u8g2.drawXBMP(171, 44, 39, 15, fan_min);
+        u8g2.drawXBMP(161, 44, 39, 15, fan_min);
         break;
       case 2:
-        u8g2.drawXBMP(171, 44, 39, 15, fan_mid);
+        u8g2.drawXBMP(161, 44, 39, 15, fan_mid);
         break;
       case 3:
-        u8g2.drawXBMP(171, 44, 39, 15, fan_max);
+        u8g2.drawXBMP(161, 44, 39, 15, fan_max);
         break;
       }
 
@@ -179,6 +177,14 @@ void update()
     irsender.sendOff();
     isLastOn = false;
   }
+
+  //Turn on Display
+  Serial.println("UpdateDisplay");
+  previousMillis = millis();
+  currentContrast = 255;
+  u8g2.setContrast(currentContrast);
+
+
   updateDisplay();
 }
 
@@ -227,7 +233,8 @@ void blink()
 void setup_ota()
 {
   // Set OTA Password, and change it in platformio.ini
-  ArduinoOTA.setPassword("ESP8266_PASSWORD");
+  ArduinoOTA.setHostname("ESP8266-AC");
+  // ArduinoOTA.setPassword("12345678");
   ArduinoOTA.onStart([]() {});
   ArduinoOTA.onEnd([]() {});
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {});
@@ -307,10 +314,17 @@ void decrement()
 
 void btnPowerPressed()
 {
+  int press_millis = millis();
   while (digitalRead(btnPower) == LOW)
   {
     delay(0);
+    if (millis() - press_millis > 1000){
+      isCool = !isCool;
+      update();
+      return;
+    }
   };
+
   ACOnOff();
   updateServerValue();
 }
@@ -456,7 +470,6 @@ void callback(char *topic, byte *payload, unsigned int length)
 void autoAdjustScreenBrightness()
 {
   unsigned long currentMillis = millis();
-  static int currentContrast = 0;
 
   if (currentMillis - previousMillis >= screenBrightnessUpdateInt)
   {
@@ -464,17 +477,26 @@ void autoAdjustScreenBrightness()
     // Serial.println(analogRead(ldrPin));
     // save the last time you blinked the LED
     previousMillis = currentMillis;
-    if (analogRead(ldrPin) < 300 && currentContrast != 1)
-    {
-      u8g2.setContrast(1);
-      currentContrast = 1;
+    
+    if (analogRead(ldrPin) < 100 && currentContrast != 0){
+      u8g2.clear();
+      Serial.println("Clear");
     }
-    else if(analogRead(ldrPin) >= 300)
+    else if (analogRead(ldrPin) < 400 && currentContrast != 1)
     {
-      // u8g2.setContrast(255);
-            u8g2.setContrast(1);
+      currentContrast = 1;
+      u8g2.setContrast(currentContrast);
+      updateDisplay();
+
+    }
+    else if(analogRead(ldrPin) >= 400)
+    {
+      u8g2.setContrast(255);
+            // u8g2.setContrast(1);
 
       currentContrast = 255;
+      updateDisplay();
+
     }
   }
 }
@@ -482,11 +504,16 @@ void autoAdjustScreenBrightness()
 void setup()
 {
   Serial.begin(9600);
-
+  u8g2.begin();
+    u8g2.setFont(u8g2_font_logisoso50_tn);
+  u8g2.firstPage();
+  do{
+  u8g2.drawStr(20, 17, "WiFi - AC");
+  }while(u8g2.nextPage());
   // Setup buttons
   pinMode(btnPower, INPUT_PULLUP);
-  pinMode(rotary1, INPUT_PULLUP);
-  pinMode(rotary2, INPUT_PULLUP);
+  pinMode(btnUp, INPUT_PULLUP);
+  pinMode(btnDn, INPUT_PULLUP);
   pinMode(rotary_btn, INPUT_PULLUP);
   // pinMode(btnSpeed, INPUT_PULLUP);
   // pinMode(btnSwing, INPUT_PULLUP);
@@ -502,13 +529,12 @@ void setup()
 
   //Attach interrupt for manual button controls
   attachInterrupt(digitalPinToInterrupt(btnPower), btnPowerPressed, FALLING);
-  attachInterrupt(digitalPinToInterrupt(rotary1), rotary1Int, FALLING);
-  attachInterrupt(digitalPinToInterrupt(rotary2), rotary2Int, FALLING);
+  attachInterrupt(digitalPinToInterrupt(btnUp), btnUpInt, FALLING);
+  attachInterrupt(digitalPinToInterrupt(btnDn), btnDnInt, FALLING);
   attachInterrupt(digitalPinToInterrupt(rotary_btn), changeACmode, FALLING);
   // attachInterrupt(digitalPinToInterrupt(btnSpeed), btnSpeedInt, FALLING);
   // attachInterrupt(digitalPinToInterrupt(btnSwing), btnSwingInt, FALLING);
 
-  u8g2.begin();
   irsender.begin();
   digitalWrite(2, HIGH);
   updateDisplay();
