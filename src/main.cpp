@@ -8,7 +8,9 @@
 #include <ArduinoOTA.h>
 #include <math.h>
 #include <U8g2lib.h>
-#include "SamsungIRSender.h"
+#include <ir_Samsung.h>
+
+
 #include "main.h"
 // #include <IRsend.h>
 #include "ui.h"
@@ -27,7 +29,7 @@ const int OLED_rst = D1;
 const int OLED_cs = D0;
 WiFiClient espClient;
 PubSubClient client(espClient);
-SamsungIRSender irsender;
+IRSamsungAc ac(IR_pin);;
 U8G2_SSD1322_NHD_256X64_1_3W_SW_SPI u8g2(U8G2_R2, /* clock=*/OLED_ckl, /* data=*/OLED_sdin, /* cs=*/OLED_cs, /* reset=*/OLED_rst); // OLED Display
 
 //Declare prototype functions
@@ -137,7 +139,7 @@ void updateDisplay()
     do
     {
       u8g2.setFont(u8g2_font_helvR14_tr);
-      u8g2.drawStr(0, 14, "Standby..");
+      u8g2.drawStr(0, 14, "Standby.. [beta1]");
     } while (u8g2.nextPage());
   }
 }
@@ -155,27 +157,44 @@ void update()
 
   if (isOn)
   {
+    ac.on();
     if (isCool)
     {
-      irsender.setCoolMode(setTemp, fanSpeed, isSwing, !isLastOn);
       Serial.println("Send IR : temp = " + String(setTemp) + " swing = " + String(isSwing) + " Fan Speed : " + String(fanSpeed) + " IsLastOn : " + isLastOn);
       isLastOn = true;
       lastTemp = setTemp;
       lastIsSwing = isSwing;
       lastFanSpeed = fanSpeed;
       lastIsCool = true;
+
+      //Set and send commands
+      ac.setMode(kSamsungAcCool);
+      switch(fanSpeed){
+        case(0): ac.setFan(kSamsungAcFanAuto); break;
+        case(1): ac.setFan(kSamsungAcFanLow); break;
+        case(2): ac.setFan(kSamsungAcFanMed); break;
+        case(3): ac.setFan(kSamsungAcFanHigh); break;
+      }
+     
+      ac.setSwing(isSwing);
+    
+      ac.setTemp(setTemp);
     }
     else
     {
-      // irsender.setFanMode();
+      ac.setMode(kSamsungAcFan);
       lastIsCool = false;
     }
   }
   else if (isLastOn)
   {
     Serial.println("Send off");
-    irsender.sendOff();
     isLastOn = false;
+
+    //set and send command
+    // ac.off();
+    uint8_t state[21] = {0x02, 0xB2, 0x0F, 0x00, 0x00, 0x00, 0xC0, 0x01, 0xD2, 0x0F, 0x00, 0x00, 0x00, 0x00, 0x01, 0x12, 0xAF, 0x71, 0x90, 0x11, 0xC0};
+    ac.setRaw(state);
   }
 
   //Turn on Display
@@ -184,7 +203,7 @@ void update()
   currentContrast = 255;
   u8g2.setContrast(currentContrast);
 
-
+  ac.sendExtended();
   updateDisplay();
 }
 
@@ -504,12 +523,15 @@ void autoAdjustScreenBrightness()
 void setup()
 {
   Serial.begin(9600);
+
+  //Setup display
   u8g2.begin();
-    u8g2.setFont(u8g2_font_logisoso50_tn);
+  u8g2.setFont(u8g2_font_logisoso50_tn);
   u8g2.firstPage();
   do{
   u8g2.drawStr(20, 17, "WiFi - AC");
   }while(u8g2.nextPage());
+
   // Setup buttons
   pinMode(btnPower, INPUT_PULLUP);
   pinMode(btnUp, INPUT_PULLUP);
@@ -517,7 +539,6 @@ void setup()
   pinMode(rotary_btn, INPUT_PULLUP);
   // pinMode(btnSpeed, INPUT_PULLUP);
   // pinMode(btnSwing, INPUT_PULLUP);
-
   pinMode(2, OUTPUT);
 
   // Setup networking
@@ -535,8 +556,8 @@ void setup()
   // attachInterrupt(digitalPinToInterrupt(btnSpeed), btnSpeedInt, FALLING);
   // attachInterrupt(digitalPinToInterrupt(btnSwing), btnSwingInt, FALLING);
 
-  irsender.begin();
   digitalWrite(2, HIGH);
+  ac.begin();
   updateDisplay();
   updateServerValue();
 }
