@@ -8,9 +8,11 @@
 #include <ArduinoOTA.h>
 #include <math.h>
 #include <U8g2lib.h>
-#include "SamsungIRSender.h"
+#include <ir_Samsung.h>
+#include <NTPClient.h>
+
+
 #include "main.h"
-// #include <IRsend.h>
 #include "ui.h"
 
 #ifdef U8X8_HAVE_HW_SPI
@@ -27,8 +29,13 @@ const int OLED_rst = D1;
 const int OLED_cs = D0;
 WiFiClient espClient;
 PubSubClient client(espClient);
-SamsungIRSender irsender;
+IRSamsungAc ac(IR_pin);
+IRsend irsend(IR_pin);
 U8G2_SSD1322_NHD_256X64_1_3W_SW_SPI u8g2(U8G2_R2, /* clock=*/OLED_ckl, /* data=*/OLED_sdin, /* cs=*/OLED_cs, /* reset=*/OLED_rst); // OLED Display
+
+// Set up the NTP UDP client
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, NTP_ADDRESS, NTP_OFFSET, NTP_INTERVAL);
 
 //Declare prototype functions
 void increment();
@@ -72,8 +79,6 @@ void changeACmode()
 void updateDisplay()
 
 {
-
-
 
   u8g2.firstPage();
 
@@ -134,10 +139,27 @@ void updateDisplay()
   }
   else
   {
+    // Display Clock when AC is off
+    timeClient.update();
+    unsigned long epoch =  timeClient.getEpochTime();
+
+  String formattedDate = timeClient.getFormattedTime();
+  Serial.println(formattedDate);
+
+  // Extract date
+  int splitT = formattedDate.indexOf("T");
+  String dayStamp = formattedDate.substring(0, splitT);
+  Serial.print("DATE: ");
+  Serial.println(dayStamp);
+  // Extract time
+  String timeStamp = formattedDate.substring(splitT+1, formattedDate.length()-3);
+  Serial.print("HOUR: ");
+  Serial.println(timeStamp);
+
     do
     {
-      u8g2.setFont(u8g2_font_helvR14_tr);
-      u8g2.drawStr(0, 14, "Standby..");
+      u8g2.setFont(u8g2_font_logisoso50_tn);
+       u8g2.drawStr(38, 57, timeStamp.c_str());
     } while (u8g2.nextPage());
   }
 }
@@ -155,27 +177,53 @@ void update()
 
   if (isOn)
   {
+    ac.on();
     if (isCool)
     {
-      irsender.setCoolMode(setTemp, fanSpeed, isSwing, !isLastOn);
       Serial.println("Send IR : temp = " + String(setTemp) + " swing = " + String(isSwing) + " Fan Speed : " + String(fanSpeed) + " IsLastOn : " + isLastOn);
       isLastOn = true;
       lastTemp = setTemp;
       lastIsSwing = isSwing;
       lastFanSpeed = fanSpeed;
       lastIsCool = true;
+
+      //Set and send commands
+      ac.setMode(kSamsungAcCool);
+      switch (fanSpeed)
+      {
+      case (0):
+        ac.setFan(kSamsungAcFanAuto);
+        break;
+      case (1):
+        ac.setFan(kSamsungAcFanLow);
+        break;
+      case (2):
+        ac.setFan(kSamsungAcFanMed);
+        break;
+      case (3):
+        ac.setFan(kSamsungAcFanHigh);
+        break;
+      }
+
+      ac.setSwing(isSwing);
+      ac.setTemp(setTemp);
     }
     else
     {
-      // irsender.setFanMode();
+      ac.setMode(kSamsungAcFan);
       lastIsCool = false;
     }
+
+    ac.send();
   }
   else if (isLastOn)
   {
     Serial.println("Send off");
-    irsender.sendOff();
     isLastOn = false;
+
+    //set and send command
+    ac.off();
+    irsend.sendRaw(ac_off, 349, 38);      //I need to send raw for off because Library didn't work.
   }
 
   //Turn on Display
@@ -183,7 +231,6 @@ void update()
   previousMillis = millis();
   currentContrast = 255;
   u8g2.setContrast(currentContrast);
-
 
   updateDisplay();
 }
@@ -235,7 +282,13 @@ void setup_ota()
   // Set OTA Password, and change it in platformio.ini
   ArduinoOTA.setHostname("ESP8266-AC");
   // ArduinoOTA.setPassword("12345678");
-  ArduinoOTA.onStart([]() {});
+  ArduinoOTA.onStart([]() {
+    do
+    {
+      u8g2.setFont(u8g2_font_helvR14_tr);
+      u8g2.drawStr(0, 14, "OTA updating...");
+    } while (u8g2.nextPage());
+  });
   ArduinoOTA.onEnd([]() {});
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {});
   ArduinoOTA.onError([](ota_error_t error) {
@@ -318,7 +371,8 @@ void btnPowerPressed()
   while (digitalRead(btnPower) == LOW)
   {
     delay(0);
-    if (millis() - press_millis > 1000){
+    if (millis() - press_millis > 1000)   //if long press, change AC Mode
+    {
       isCool = !isCool;
       update();
       return;
@@ -329,28 +383,6 @@ void btnPowerPressed()
   updateServerValue();
 }
 
-// void btnUpPressed()
-// {
-
-//   while (digitalRead(btnTempUp) == LOW)
-//   {
-//     delay(0);
-//   };
-//   // ACOn();
-//   setTemp++;
-//   updateDisplay();
-// }
-
-// void btnDownPressed()
-// {
-//   while (digitalRead(btnTempUp) == LOW)
-//   {
-//     delay(0);
-//   };
-//   setTemp--;
-//   updateDisplay();
-//   // ACOn();
-// }
 
 void callback(char *topic, byte *payload, unsigned int length)
 {
@@ -397,14 +429,14 @@ void callback(char *topic, byte *payload, unsigned int length)
     }
     isOn = value;
     update();
-    
-     //set secondary device status
-     char data[150];
-   String message = "{\"name\" : \"" + device_name_secondary + "\", \"service_name\" : \"" + service_name_secondary + "\", \"characteristic\" : \"On\", \"value\" : " + String(isOn) + "}";
-  message.toCharArray(data, (message.length() + 1));
-  client.publish(mqtt_device_value_to_set_topic, data);
+
+    //set secondary device status (For primitive service as regular fan.)
+    char data[150];
+    String message = "{\"name\" : \"" + device_name_secondary + "\", \"service_name\" : \"" + service_name_secondary + "\", \"characteristic\" : \"On\", \"value\" : " + String(isOn) + "}";
+    message.toCharArray(data, (message.length() + 1));
+    client.publish(mqtt_device_value_to_set_topic, data);
   }
-    if ( strcmp(characteristic, "On") == 0)
+  if (strcmp(characteristic, "On") == 0)
   {
     int value = root["value"];
     if (value != 1 && value != 0)
@@ -413,14 +445,13 @@ void callback(char *topic, byte *payload, unsigned int length)
     }
     isOn = value;
     update();
-    
-     //set primary device status
-     char data[150];
-   String message = "{\"name\" : \"" + device_name + "\", \"service_name\" : \"" + service_name + "\", \"characteristic\" : \"Active\", \"value\" : " + String(isOn) + "}";
-  message.toCharArray(data, (message.length() + 1));
-  client.publish(mqtt_device_value_to_set_topic, data);
-  }
 
+    //set primary device status (For Homekit HeaterCooler service)
+    char data[150];
+    String message = "{\"name\" : \"" + device_name + "\", \"service_name\" : \"" + service_name + "\", \"characteristic\" : \"Active\", \"value\" : " + String(isOn) + "}";
+    message.toCharArray(data, (message.length() + 1));
+    client.publish(mqtt_device_value_to_set_topic, data);
+  }
 
   if (strcmp(characteristic, "SwingMode") == 0)
   {
@@ -473,50 +504,53 @@ void autoAdjustScreenBrightness()
 
   if (currentMillis - previousMillis >= screenBrightnessUpdateInt)
   {
+    
 
     // Serial.println(analogRead(ldrPin));
     // save the last time you blinked the LED
     previousMillis = currentMillis;
-    
-    if (analogRead(ldrPin) < 100 && currentContrast != 0){
+
+    if (analogRead(ldrPin) < 85 && currentContrast != 0)
+    {
       u8g2.clear();
       Serial.println("Clear");
     }
-    else if (analogRead(ldrPin) < 400 && currentContrast != 1)
+    else if (analogRead(ldrPin) < 400 && currentContrast != 1 || !isOn)
     {
       currentContrast = 1;
       u8g2.setContrast(currentContrast);
       updateDisplay();
-
     }
-    else if(analogRead(ldrPin) >= 400)
+    else if (analogRead(ldrPin) >= 400)
     {
       u8g2.setContrast(255);
-            // u8g2.setContrast(1);
+      // u8g2.setContrast(1);
 
       currentContrast = 255;
       updateDisplay();
-
     }
   }
+
+
 }
 
 void setup()
 {
   Serial.begin(9600);
+
+  //Setup display
   u8g2.begin();
-    u8g2.setFont(u8g2_font_logisoso50_tn);
+  u8g2.setFont(u8g2_font_logisoso50_tn);
   u8g2.firstPage();
-  do{
-  u8g2.drawStr(20, 17, "WiFi - AC");
-  }while(u8g2.nextPage());
+  do
+  {
+    u8g2.drawStr(20, 17, "WiFi - AC");
+  } while (u8g2.nextPage());
+
   // Setup buttons
   pinMode(btnPower, INPUT_PULLUP);
   pinMode(btnUp, INPUT_PULLUP);
   pinMode(btnDn, INPUT_PULLUP);
-  pinMode(rotary_btn, INPUT_PULLUP);
-  // pinMode(btnSpeed, INPUT_PULLUP);
-  // pinMode(btnSwing, INPUT_PULLUP);
 
   pinMode(2, OUTPUT);
 
@@ -531,14 +565,18 @@ void setup()
   attachInterrupt(digitalPinToInterrupt(btnPower), btnPowerPressed, FALLING);
   attachInterrupt(digitalPinToInterrupt(btnUp), btnUpInt, FALLING);
   attachInterrupt(digitalPinToInterrupt(btnDn), btnDnInt, FALLING);
-  attachInterrupt(digitalPinToInterrupt(rotary_btn), changeACmode, FALLING);
-  // attachInterrupt(digitalPinToInterrupt(btnSpeed), btnSpeedInt, FALLING);
-  // attachInterrupt(digitalPinToInterrupt(btnSwing), btnSwingInt, FALLING);
 
-  irsender.begin();
+
   digitalWrite(2, HIGH);
   updateDisplay();
   updateServerValue();
+
+  //Setup IR Lib
+  ac.begin();
+  irsend.begin();
+
+  //Start the NTP UDP client
+  timeClient.begin();
 }
 
 void loop()
