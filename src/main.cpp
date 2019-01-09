@@ -11,6 +11,7 @@
 #include <ir_Samsung.h>
 #include <NTPClient.h>
 
+#define MQTT_MAX_PACKET_SIZE 512
 
 #include "main.h"
 #include "ui.h"
@@ -238,14 +239,17 @@ void update()
 void updateServerValue()
 {
 
+  /*!!-- Need to redefine MQTT_MAX_PACKET_SIZE 256 --!! */
+
   String value;
   String message;
-  char data[120];
+  char data[200];
 
   //Primary
-  message = "{\"name\" : \"" + device_name + "\", \"service_name\" : \"" + service_name + "\", \"characteristic\" : \"CurrentTemperature\", \"value\" : " + String(setTemp) + "}";
-  message.toCharArray(data, (message.length() + 1));
-  client.publish(mqtt_device_value_to_set_topic, data);
+  // message = "{\"name\" : \"" + device_name + "\", \"service_name\" : \"" + service_name + "\", \"characteristic\" : \"CurrentTemperature\", \"value\" : " + String(setTemp) + "}";
+  // message.toCharArray(data, (message.length() + 1));
+  message = "{\"name\": \"Smart AC\",\"service_name\": \"smart_ac\",\"characteristic\": \"CurrentTemperature\",\"value\":"+String(setTemp)+"}";
+  client.publish(mqtt_device_value_to_set_topic, message.c_str());
 
   message = "{\"name\" : \"" + device_name + "\", \"service_name\" : \"" + service_name + "\", \"characteristic\" : \"Active\", \"value\" : " + String(isOn) + "}";
   message.toCharArray(data, (message.length() + 1));
@@ -255,13 +259,24 @@ void updateServerValue()
   message.toCharArray(data, (message.length() + 1));
   client.publish(mqtt_device_value_to_set_topic, data);
 
-  message = "{\"name\" : \"" + device_name + "\", \"service_name\" : \"" + service_name + "\", \"characteristic\" : \"CoolingThresholdTemperature\", \"value\" : " + String(setTemp) + "}";
-  message.toCharArray(data, (message.length() + 1));
-  client.publish(mqtt_device_value_to_set_topic, data);
+  message = "{\"name\": \"Smart AC\",\"service_name\": \"smart_ac\",\"characteristic\": \"CoolingThresholdTemperature\",\"value\":" +String(setTemp) + " }";
+  client.publish(mqtt_device_value_to_set_topic, message.c_str());
 
   message = "{\"name\" : \"" + device_name + "\", \"service_name\" : \"" + service_name + "\", \"characteristic\" : \"RotationSpeed\", \"value\" : " + String(fanSpeed) + "}";
   message.toCharArray(data, (message.length() + 1));
   client.publish(mqtt_device_value_to_set_topic, data);
+
+  if (isCool){
+     message = "{\"name\": \"Smart AC\",\"service_name\": \"smart_ac\",\"characteristic\": \"CurrentHeaterCoolerState\",\"value\":1}";
+     client.publish(mqtt_device_value_to_set_topic, message.c_str());
+     message = "{\"name\": \"Smart AC\",\"service_name\": \"smart_ac\",\"characteristic\": \"TargetHeaterCoolerState\",\"value\":2}";
+     client.publish(mqtt_device_value_to_set_topic, message.c_str());
+  }else{
+    message = "{\"name\": \"Smart AC\",\"service_name\": \"smart_ac\",\"characteristic\": \"CurrentHeaterCoolerState\",\"value\":2}";
+     client.publish(mqtt_device_value_to_set_topic, message.c_str());
+     message = "{\"name\": \"Smart AC\",\"service_name\": \"smart_ac\",\"characteristic\": \"TargetHeaterCoolerState\",\"value\":1}";
+     client.publish(mqtt_device_value_to_set_topic, message.c_str());
+  }
 
   //Secondary
   message = "{\"name\" : \"" + device_name_secondary + "\", \"service_name\" : \"" + service_name_secondary + "\", \"characteristic\" : \"On\", \"value\" : " + String(isOn) + "}";
@@ -496,6 +511,9 @@ void callback(char *topic, byte *payload, unsigned int length)
     }
     update();
   }
+
+  updateServerValue();
+
 }
 
 void autoAdjustScreenBrightness()
