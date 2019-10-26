@@ -45,21 +45,27 @@ String service_name_secondary = "smart_ac_basic";
 
 // Global variables
 unsigned int isOn = false;
-unsigned int setTemp = 25;
+unsigned int setTemp = 23;
 unsigned int isCool = true; //false = fan mode
 unsigned int fanSpeed = 0;     //0: Auto, 1:Min, 2:Medium, 3:High
 unsigned int maxTemp = 28;
-unsigned int minTemp = 23;
+unsigned int minTemp = 18;
+unsigned int currentAction = 0;
 bool isSwing = false;
 bool rotary_1 = false;
 bool rotary_2 = false;
 unsigned long previousMillis = 0;               //For auto screen brightness
+unsigned long lastConnectingTime = 0;               //For auto screen brightness
 int currentContrast = 255;
 
 // Define NTP properties
 #define NTP_OFFSET  7 * 60 * 60      // In seconds
 #define NTP_INTERVAL 60 * 1000    // In miliseconds
 #define NTP_ADDRESS  "ntp.ku.ac.th"  // change this to whatever pool is closest (see ntp.org)
+
+#define ACTION_POWER  1
+#define ACTION_UP  2
+#define ACTION_DOWN  3
 
 
 //AC off raw data, because I can't turn off my AC with IRSamsungAc library
