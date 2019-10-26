@@ -5,3 +5,7 @@
 .vscode/launch.json
 
 \.vscode/settings\.json
+
+*.o
+
+.pio/
